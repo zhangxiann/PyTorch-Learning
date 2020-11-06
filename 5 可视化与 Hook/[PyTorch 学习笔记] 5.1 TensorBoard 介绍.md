@@ -1,0 +1,581 @@
+---
+thumbnail: https://image.zhangxiann.com/andrea-hagenhoff-dIXCt2zUzV0-unsplash.jpg
+toc: true
+date: 2020/3/19 20:45:20
+disqusId: zhangxian
+categories:
+- PyTorch
+
+tags:
+- AI
+- Deep Learning
+---
+
+> 本章代码：
+>
+> - [https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson5/tensorboard_methods.py](https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson5/tensorboard_methods.py)
+> - [https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson5/tensorboard_methods_2.py](https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson5/tensorboard_methods_2.py)
+> - [https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson5/loss_acc_weights_grad.py](https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson5/loss_acc_weights_grad.py)
+
+
+TensorBoard 是 TensorFlow 中强大的可视化工具，支持标量、文本、图像、音频、视频和 Embedding 等多种数据可视化。
+
+在 PyTorch 中也可以使用 TensorBoard，具体是使用 TensorboardX 来调用 TensorBoard。除了安装 TensorboardX，还要安装 TensorFlow 和 TensorBoard，其中 TensorFlow 和 TensorBoard 需要一致。<!--more-->
+
+TensorBoardX 可视化的流程需要首先编写 Python 代码把需要可视化的数据保存到 event file 文件中，然后再使用 TensorBoardX 读取 event file 展示到网页中。
+
+下面的代码是一个保存 event file 的例子：
+
+```
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from tensorboardX import SummaryWriter
+    from common_tools import set_seed
+    max_epoch = 100
+
+    writer = SummaryWriter(comment='test_comment', filename_suffix="test_suffix")
+
+    for x in range(max_epoch):
+
+        writer.add_scalar('y=2x', x * 2, x)
+        writer.add_scalar('y=pow_2_x', 2 ** x, x)
+
+        writer.add_scalars('data/scalar_group', {"xsinx": x * np.sin(x),
+                                                 "xcosx": x * np.cos(x)}, x)
+
+    writer.close()
+```
+
+上面具体保存的数据，我们先不关注，主要关注的是保存 event file 需要用到 SummaryWriter 类，这个类是用于保存数据的最重要的类，执行完后，会在当前文件夹生成一个`runs`的文件夹，里面保存的就是数据的 event file。
+
+然后在命令行中输入`tensorboard --logdir=lesson5/runs`启动 tensorboard 服务，其中`lesson5/runs`是`runs`文件夹的路径。然后命令行会显示 tensorboard 的访问地址：
+
+```
+TensorBoard 1.9.0 at http://LAPTOP-DPDNNJSU:6006 (Press CTRL+C to quit)
+```
+
+在浏览器中打开，显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702094355.png"/></div><br>
+最上面的一栏显示的是数据类型，由于我们在代码中只记录了 scalar 类型的数据，因此只显示`SCALARS`。
+
+
+
+右上角有一些功能设置
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702094720.png"/></div><br>
+点击`INACTIVE`显示我们没有记录的数据类型。设置里可以设置刷新 tensorboard 的间隔，在模型训练时可以实时监控数据的变化。
+
+左边的菜单栏如下，点击`Show data download links`可以展示每个图的下载按钮，如果一个图中有多个数据，需要选中需要下载的曲线，然后下载，格式有 `csv`和`json`可选。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702094944.png"/></div><br>
+第二个选项`Ignore outliers in chart scaling`可以设置是否忽略离群点，在`y_pow_2_x`中，数据的尺度达到了 $10^{18}$，勾选`Ignore outliers in chart scaling`后$y$轴的尺度下降到$10^{17}$。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702095600.png"/></div><br>
+Soothing 是对图像进行平滑，下图中，颜色较淡的阴影部分才是真正的曲线数据，Smoothing 设置为了 0.6，进行了平滑才展示为颜色较深的线。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702100008.png"/></div><br>
+Smoothing 设置为 0，没有进行平滑，显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702100027.png"/></div><br>
+Smoothing 设置为 1，则平滑后的线和$x$轴重合，显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702100148.png"/></div><br>
+`Horizontal Axis`表示横轴：`STEP`表示原始数据作为横轴，`RELATIVE`和`WALL`都是以时间作为横轴，单位是小时，`RELATIVE`是相对时间，`WALL`是绝对时间。
+
+`runs`显示所有的 event file，可以选择展示某些 event file 的图像，其中正方形按钮是多选，圆形按钮是单选。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702100851.png"/></div><br>
+上面的搜索框可以根据 tags 来搜索数据对应的图像
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702101132.png"/></div><br>
+# optimizer 的属性
+
+PyTorch 中提供了 Optimizer 类，定义如下：
+
+```
+class Optimizer(object):
+	def __init__(self, params, defaults):        
+		self.defaults = defaults
+        self.state = defaultdict(dict)
+        self.param_groups = []
+```
+
+主要有 3 个属性
+
+- defaults：优化器的超参数，如 weight_decay，momentum
+- state：参数的缓存，如 momentum 中需要用到前几次的梯度，就缓存在这个变量中
+- param_groups：管理的参数组，是一个 list，其中每个元素是字典，包括 momentum、lr、weight_decay、params 等。
+- _step_count：记录更新 次数，在学习率调整中使用
+
+
+
+# SummaryWriter
+
+```
+torch.utils.tensorboard.writer.SummaryWriter(log_dir=None, comment='', purge_step=None, max_queue=10, flush_secs=120, filename_suffix='')
+```
+
+功能：提供创建 event file 的高级接口
+
+主要功能：
+
+- log_dir：event file 输出文件夹，默认为`runs`文件夹
+- comment：不指定 log_dir 时，`runs`文件夹里的子文件夹后缀
+- filename_suffix：event_file 文件名后缀
+
+代码如下：
+
+```
+    log_dir = "./train_log/test_log_dir"
+    writer = SummaryWriter(log_dir=log_dir, comment='_scalars', filename_suffix="12345678")
+    # writer = SummaryWriter(comment='_scalars', filename_suffix="12345678")
+
+    for x in range(100):
+        writer.add_scalar('y=pow_2_x', 2 ** x, x)
+
+    writer.close()
+```
+
+运行后会生成`train_log/test_log_dir`文件夹，里面的 event file 文件名后缀是`12345678`。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703172309.png"/></div><br>
+但是我们指定了`log_dir`，`comment`参数没有生效。如果想要`comment`参数生效，把`SummaryWriter`的初始化改为`writer = SummaryWriter(comment='_scalars', filename_suffix="12345678")`，生成的文件夹如下，`runs`里的子文件夹后缀是`_scalars`。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703172832.png"/></div><br>
+# add_scalar
+
+```
+add_scalar(tag, scalar_value, global_step=None, walltime=None)
+```
+
+功能：记录标量
+
+- tag：图像的标签名，图的唯一标识
+- scalar_value：要记录的标量，y 轴的数据
+- global_step：x 轴的数据
+
+
+
+# add_scalars
+
+上面的`add_scalar()`只能记录一条曲线的数据。但是我们在实际中可能需要在一张图中同时展示多条曲线，比如在训练模型时，经常需要同时查看训练集和测试集的 loss。这时我们可以使用`add_scalars()`方法
+
+```
+add_scalars(main_tag, tag_scalar_dict, global_step=None, walltime=None)
+```
+
+- main_tag：该图的标签
+- tag_scalar_dict：用字典的形式记录多个曲线。key 是变量的 tag，value 是变量的值
+
+代码如下：
+
+```
+    max_epoch = 100
+    writer = SummaryWriter(comment='test_comment', filename_suffix="test_suffix")
+    for x in range(max_epoch):
+        writer.add_scalar('y=2x', x * 2, x)
+        writer.add_scalar('y=pow_2_x', 2 ** x, x)
+        writer.add_scalars('data/scalar_group', {"xsinx": x * np.sin(x),
+                                                 "xcosx": x * np.cos(x)}, x)
+    writer.close()
+```
+
+运行后生成 event file，然后使用 TensorBoard 来查看如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200702094355.png"/></div><br>
+每个图像下面都有 3 个按钮，中间的按钮是以对数形式展示 y 轴。如对`y=pow_2_x`曲线的 y 轴取对数展示如下，变成了直线。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703201419.png"/></div><br>
+# add_histogram
+
+```
+add_histogram(tag, values, global_step=None, bins='tensorflow', walltime=None, max_bins=None)
+```
+
+功能：统计直方图与多分位折线图
+
+- tag：图像的标签名，图的唯一标识
+- values：要统计的参数，通常统计权值、偏置或者梯度
+- global_step：第几个子图
+- bins：取直方图的 bins
+
+下面的代码构造了均匀分布和正态分布，循环生成了 2 次，分别用`matplotlib`和 TensorBoard 进行画图。
+
+```
+    writer = SummaryWriter(comment='test_comment', filename_suffix="test_suffix")
+    for x in range(2):
+        np.random.seed(x)
+        data_union = np.arange(100)
+        data_normal = np.random.normal(size=1000)
+        writer.add_histogram('distribution union', data_union, x)
+        writer.add_histogram('distribution normal', data_normal, x)
+        plt.subplot(121).hist(data_union, label="union")
+        plt.subplot(122).hist(data_normal, label="normal")
+        plt.legend()
+        plt.show()
+    writer.close()
+```
+
+`matplotlib`画图显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703205818.png"/></div><br>
+<div align="center"><img src="https://image.zhangxiann.com/20200703205834.png"/></div><br>
+TensorBoard 显示结果如下。
+
+正态分布显示如下，每个子图分别对应一个 global_step：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703205906.png"/></div><br>
+均匀分布显示如下，显示曲线的原因和`bins`参数设置有关，默认是`tensorflow`：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703205930.png"/></div><br>
+除此之外，还会得到`DISTRIBUTIONS`，这是多分位折线图，纵轴有 9 个折线，表示数据的分布区间，某个区间的颜色越深，表示这个区间的数所占比例越大。横轴是 global_step。这个图的作用是观察数方差的变化情况。显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703211026.png"/></div><br>
+<div align="center"><img src="https://image.zhangxiann.com/20200703211045.png"/></div><br>
+# 模型指标监控
+
+下面使用 TensorBoard 来监控人民币二分类实验训练过程中的 loss、accuracy、weights 和 gradients 的变化情况。
+
+首先定义一个`SummaryWriter`。
+
+```
+writer = SummaryWriter(comment='test_your_comment', filename_suffix="_test_your_filename_suffix")
+```
+
+然后在每次训练中记录 loss 和 accuracy 的值
+
+```
+# 记录数据，保存于event file
+writer.add_scalars("Loss", {"Train": loss.item()}, iter_count)
+writer.add_scalars("Accuracy", {"Train": correct / total}, iter_count)
+```
+
+并且在验证时记录所有验证集样本的 loss 和 accuracy 的均值
+
+```
+# 记录数据，保存于event file
+writer.add_scalars("Loss", {"Valid": np.mean(valid_curve)}, iter_count)
+writer.add_scalars("Accuracy", {"Valid": correct / total}, iter_count)
+```
+
+并且在每个 epoch 中记录每一层权值以及权值的梯度。
+
+```
+    # 每个epoch，记录梯度，权值
+    for name, param in net.named_parameters():
+        writer.add_histogram(name + '_grad', param.grad, epoch)
+        writer.add_histogram(name + '_data', param, epoch)
+```
+
+在训练还没结束时，就可以启动 TensorBoard 可视化，Accuracy 的可视化如下，颜色较深的是训练集的 Accuracy，颜色较浅的是 验证集的样本：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703215713.png"/></div><br>
+Loss 的可视化如下，其中验证集的 Loss 是从第 10 个 epoch 才开始记录的，并且 验证集的 Loss 是所有验证集样本的 Loss 均值，所以曲线更加平滑；而训练集的 Loss 是 batch size 的数据，因此震荡幅度较大：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703215735.png"/></div><br>
+上面的 Loss 曲线图与使用`matplotlib`画的图不太一样，因为 TensorBoard 默认会进行 Smoothing，我们把 Smoothing 系数设置为 0 后，显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703220706.png"/></div><br>
+而记录权值以及权值梯度的 HISTOGRAMS 显示如下，记录了每一层的数据：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703220840.png"/></div><br>
+展开查看第一层的权值和梯度。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200703221836.png"/></div><br>
+可以看到每一个 epoch 的梯度都是呈正态分布，说明权值分布比较好；梯度都是接近于 0，说明模型很快就收敛了。通常我们使用 TensorBoard 查看我们的网络参数在训练时的分布变化情况，如果分布很奇怪，并且 Loss 没有下降，这时需要考虑是什么原因改变了数据的分布较大的。如果前面网络层的梯度很小，后面网络层的梯度比较大，那么可能是梯度消失，因为后面网络层的较大梯度反向传播到前面网络层时已经变小了。如果前后网络层的梯度都很小，那么说明不是梯度消失，而是因为 Loss 很小，模型已经接近收敛。
+
+
+
+# add_image
+
+```
+add_image(tag, img_tensor, global_step=None, walltime=None, dataformats='CHW')
+```
+
+功能：记录图像
+
+- tag：图像的标签名，图像的唯一标识
+- img_tensor：图像数据，需要注意尺度
+- global_step：记录这是第几个子图
+- dataformats：数据形式，取值有'CHW'，'HWC'，'HW'。如果像素值在 [0, 1] 之间，那么默认会乘以 255，放大到 [0, 255] 范围之间。如果有大于 1 的像素值，认为已经是 [0, 255] 范围，那么就不会放大。
+
+代码如下：
+
+```
+writer = SummaryWriter(comment='test_your_comment', filename_suffix="_test_your_filename_suffix")
+
+# img 1     random
+# 随机噪声的图片
+fake_img = torch.randn(3, 512, 512)
+writer.add_image("fake_img", fake_img, 1)
+time.sleep(1)
+
+# img 2     ones
+# 像素值全为 1 的图片，会乘以 255，所以是白色的图片
+fake_img = torch.ones(3, 512, 512)
+time.sleep(1)
+writer.add_image("fake_img", fake_img, 2)
+
+# img 3     1.1
+# 像素值全为 1.1 的图片，不会乘以 255，所以是黑色的图片
+fake_img = torch.ones(3, 512, 512) * 1.1
+time.sleep(1)
+writer.add_image("fake_img", fake_img, 3)
+
+# img 4     HW
+fake_img = torch.rand(512, 512)
+writer.add_image("fake_img", fake_img, 4, dataformats="HW")
+
+# img 5     HWC
+fake_img = torch.rand(512, 512, 3)
+writer.add_image("fake_img", fake_img, 5, dataformats="HWC")
+
+writer.close()
+```
+
+使用 TensorBoard 可视化如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704142226.png"/></div><br>
+图片上面的`step`可以选择第几张图片，如选择第 3 张图片，显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704142334.png"/></div><br>
+# torchvision.utils.make_grid
+
+上面虽然可以通过拖动显示每张图片，但实际中我们希望在网格中同时展示多张图片，可以用到`make_grid()`函数。
+
+```
+torchvision.utils.make_grid(tensor: Union[torch.Tensor, List[torch.Tensor]], nrow: int = 8, padding: int = 2, normalize: bool = False, range: Optional[Tuple[int, int]] = None, scale_each: bool = False, pad_value: int = 0)
+```
+
+功能：制作网格图像
+
+- tensor：图像数据，$B \times C \times H \times W$的形状
+- nrow：行数(列数是自动计算的，为：$\frac{B}{nrow}$)
+- padding：图像间距，单位是像素，默认为 2
+- normalize：是否将像素值标准化到 [0, 255] 之间
+- range：标准化范围，例如原图的像素值范围是 [-1000, 2000]，设置 range 为 [-600, 500]，那么会把小于 -600 的像素值变为 -600，那么会把大于 500 的像素值变为 500，然后标准化到 [0, 255] 之间
+- scale_each：是否单张图维度标准化
+- pad_value：间隔的像素值
+
+下面的代码是人民币图片的网络可视化，batch_size 设置为 16，nrow 设置为 4，得到 4 行 4 列的网络图像
+
+```
+writer = SummaryWriter(comment='test_your_comment', filename_suffix="_test_your_filename_suffix")
+
+split_dir = os.path.join(enviroments.project_dir, "data", "rmb_split")
+train_dir = os.path.join(split_dir, "train")
+# train_dir = "path to your training data"
+# 先把宽高缩放到 [32， 64] 之间，然后使用 toTensor 把 Image 转化为 tensor，并把像素值缩放到 [0, 1] 之间
+transform_compose = transforms.Compose([transforms.Resize((32, 64)), transforms.ToTensor()])
+train_data = RMBDataset(data_dir=train_dir, transform=transform_compose)
+train_loader = DataLoader(dataset=train_data, batch_size=16, shuffle=True)
+data_batch, label_batch = next(iter(train_loader))
+
+img_grid = vutils.make_grid(data_batch, nrow=4, normalize=True, scale_each=True)
+# img_grid = vutils.make_grid(data_batch, nrow=4, normalize=False, scale_each=False)
+writer.add_image("input img", img_grid, 0)
+
+writer.close()
+```
+
+TensorBoard 显示如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704155200.png"/></div><br>
+# AlexNet 卷积核与特征图可视化
+
+使用 TensorBoard 可视化 AlexNet 网络的前两层卷积核。其中每一层的卷积核都把输出的维度作为 global_step，包括两种可视化方式：一种是每个 (w, h) 维度作为灰度图，添加一个 c 的维度，形成 (b, c, h, w)，其中 b 是 输入的维度；另一种是把整个卷积核 reshape 到 c 是 3 的形状，再进行可视化。详细见如下代码：
+
+```
+    writer = SummaryWriter(comment='test_your_comment', filename_suffix="_test_your_filename_suffix")
+
+    alexnet = models.alexnet(pretrained=True)
+
+    # 当前遍历到第几层网络的卷积核了
+    kernel_num = -1
+    # 最多显示两层网络的卷积核:第 0 层和第 1 层
+    vis_max = 1
+
+    # 获取网络的每一层
+    for sub_module in alexnet.modules():
+        # 判断这一层是否为 2 维卷积层
+        if isinstance(sub_module, nn.Conv2d):
+            kernel_num += 1
+            # 如果当前层大于1，则停止记录权值
+            if kernel_num > vis_max:
+                break
+            # 获取这一层的权值
+            kernels = sub_module.weight
+            # 权值的形状是 [c_out, c_int, k_w, k_h]
+            c_out, c_int, k_w, k_h = tuple(kernels.shape)
+
+            # 根据输出的每个维度进行可视化
+            for o_idx in range(c_out):
+                # 取出的数据形状是 (c_int, k_w, k_h)，对应 BHW; 需要扩展为 (c_int, 1, k_w, k_h)，对应 BCHW
+                kernel_idx = kernels[o_idx, :, :, :].unsqueeze(1)   # make_grid需要 BCHW，这里拓展C维度
+                # 注意 nrow 设置为 c_int，所以行数为 1。在 for 循环中每 添加一个，就会多一个 global_step
+                kernel_grid = vutils.make_grid(kernel_idx, normalize=True, scale_each=True, nrow=c_int)
+                writer.add_image('{}_Convlayer_split_in_channel'.format(kernel_num), kernel_grid, global_step=o_idx)
+            # 因为 channe 为 3 时才能进行可视化，所以这里 reshape
+            kernel_all = kernels.view(-1, 3, k_h, k_w)  #b, 3, h, w
+            kernel_grid = vutils.make_grid(kernel_all, normalize=True, scale_each=True, nrow=8)  # c, h, w
+            writer.add_image('{}_all'.format(kernel_num), kernel_grid, global_step=kernel_num+1)
+
+            print("{}_convlayer shape:{}".format(kernel_num, tuple(kernels.shape)))
+
+    writer.close()
+```
+
+
+
+使用 TensorBoard 可视化如下。
+
+这是根据输出的维度分批展示第一层卷积核的可视化
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704172404.png"/></div><br>
+这是根据输出的维度分批展示第二层卷积核的可视化
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704173706.png"/></div><br>
+这是整个第一层卷积核的可视化
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704173830.png"/></div><br>
+这是整个第二层卷积核的可视化
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704173902.png"/></div><br>
+下面把 AlexNet 的第一个卷积层的输出进行可视化，首先对图片数据进行预处理(resize，标准化等操作)。由于在定义模型时，网络层通过nn.Sequential() 堆叠，保存在 features 变量中。因此通过 features 获取第一个卷积层。把图片输入卷积层得到输出，形状为 (1, 64, 55, 55)，需要转换为 (64, 1, 55, 55)，对应 (B, C, H, W)，nrow 设置为 8，最后进行可视化，代码如下：
+
+```
+    writer = SummaryWriter(comment='test_your_comment', filename_suffix="_test_your_filename_suffix")
+
+    # 数据
+    path_img = "./lena.png"     # your path to image
+    normMean = [0.49139968, 0.48215827, 0.44653124]
+    normStd = [0.24703233, 0.24348505, 0.26158768]
+
+    norm_transform = transforms.Normalize(normMean, normStd)
+    img_transforms = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        norm_transform
+    ])
+
+    img_pil = Image.open(path_img).convert('RGB')
+    if img_transforms is not None:
+        img_tensor = img_transforms(img_pil)
+    img_tensor.unsqueeze_(0)    # chw --> bchw
+
+    # 模型
+    alexnet = models.alexnet(pretrained=True)
+
+    # forward
+    # 由于在定义模型时，网络层通过nn.Sequential() 堆叠，保存在 features 变量中。因此通过 features 获取第一个卷积层
+    convlayer1 = alexnet.features[0]
+    # 把图片输入第一个卷积层
+    fmap_1 = convlayer1(img_tensor)
+
+    # 预处理
+    fmap_1.transpose_(0, 1)  # bchw=(1, 64, 55, 55) --> (64, 1, 55, 55)
+    fmap_1_grid = vutils.make_grid(fmap_1, normalize=True, scale_each=True, nrow=8)
+
+    writer.add_image('feature map in conv1', fmap_1_grid, global_step=322)
+    writer.close()
+```
+
+使用 TensorBoard 可视化如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200704175759.png"/></div><br>
+# add_graph
+
+```
+add_graph(model, input_to_model=None, verbose=False)
+```
+
+功能：可视化模型计算图
+
+- model：模型，必须继承自 nn.Module
+- input_to_model：输入给模型的数据，形状为 BCHW
+- verbose：是否打印图结构信息
+
+查看 LeNet 的计算图代码如下：
+
+```
+    writer = SummaryWriter(comment='test_your_comment', filename_suffix="_test_your_filename_suffix")
+
+    # 模型
+    fake_img = torch.randn(1, 3, 32, 32)
+    lenet = LeNet(classes=2)
+    writer.add_graph(lenet, fake_img)
+    writer.close()
+```
+
+使用 TensorBoard 可视化如下：
+
+
+
+
+
+# torchsummary
+
+模型计算图的可视化还是比较复杂，不够清晰。而`torchsummary`能够查看模型的输入和输出的形状，可以更加清楚地输出模型的结构。
+
+```
+torchsummary.summary(model, input_size, batch_size=-1, device="cuda")
+```
+
+功能：查看模型的信息，便于调试
+
+- model：pytorch 模型，必须继承自 nn.Module
+- input_size：模型输入 size，形状为 CHW
+- batch_size：batch_size，默认为 -1，在展示模型每层输出的形状时显示的 batch_size
+- device："cuda"或者"cpu"
+
+查看 LeNet 的模型信息代码如下：
+
+```
+    # 模型
+    lenet = LeNet(classes=2)
+    print(summary(lenet, (3, 32, 32), device="cpu"))
+```
+
+输出如下：
+
+```
+----------------------------------------------------------------
+        Layer (type)               Output Shape         Param #
+================================================================
+            Conv2d-1            [-1, 6, 28, 28]             456
+            Conv2d-2           [-1, 16, 10, 10]           2,416
+            Linear-3                  [-1, 120]          48,120
+            Linear-4                   [-1, 84]          10,164
+            Linear-5                    [-1, 2]             170
+================================================================
+Total params: 61,326
+Trainable params: 61,326
+Non-trainable params: 0
+----------------------------------------------------------------
+Input size (MB): 0.01
+Forward/backward pass size (MB): 0.05
+Params size (MB): 0.23
+Estimated Total Size (MB): 0.30
+----------------------------------------------------------------
+None
+```
+
+上述信息分别有模型每层的输出形状，每层的参数数量，总的参数数量，以及模型大小等信息。
+
+我们以第一层为例，第一层卷积核大小是 (6, 3, 5, 5)，每个卷积核还有一个偏置，因此$6 \times 3 \times 5 \times 5+6=456$。
+
+
+
+**参考资料**
+
+- [深度之眼 PyTorch 框架班](https://ai.deepshare.net/detail/p_5df0ad9a09d37_qYqVmt85/6)
+
+<br>
+
+如果你觉得这篇文章对你有帮助，不妨点个赞，让我有更多动力写出好文章。
+<br>
+
+我的文章会首发在公众号上，欢迎扫码关注我的公众号**张贤同学**。
+
+<div align="center"><img src="https://image.zhangxiann.com/QRcode_8cm.jpg"/></div><br>

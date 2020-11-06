@@ -1,0 +1,39 @@
+{
+    "title": "PyTorch 学习笔记",
+    "description": "通俗易懂的 PyTorch 学习笔记",
+    "author": "zhangxian",
+    "language": "zh-hans",
+    "root": ".",
+	
+    "plugins": ["summary", "-search", "hide-element", 
+		"back-to-top-button", "chapter-fold", "code",
+		"splitter", "-lunr", "-search", "search-pro", 
+		"insert-logo", "custom-favicon", "pageview-count",
+		"tbfed-pagefooter", "-sharing"
+	],
+	"pluginsConfig": {
+        "hide-element": {
+            "elements": [".gitbook-link"]
+        },
+		"insert-logo": {
+			"url": "https://image.zhangxiann.com/pytorch.png",
+			"style": "background: none; max-height: 30px; min-height: 30px"
+		},
+		"favicon": "avatar.jpg",
+        "tbfed-pagefooter": {
+            "copyright":"Copyright zhangxian 2020",
+            "modify_label": "该文章修订时间：",
+            "modify_format": "YYYY-MM-DD HH:mm:ss"
+        }
+
+
+    },
+	"links" : {
+		"sidebar" : {
+			"博客" : "https://blog.zhangxiann.com/"
+		}
+	}
+
+}
+
+

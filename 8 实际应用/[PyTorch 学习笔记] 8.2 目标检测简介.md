@@ -1,0 +1,579 @@
+---
+thumbnail: https://image.zhangxiann.com/andrea-hagenhoff-dIXCt2zUzV0-unsplash.jpg
+toc: true
+date: 2020/4/21 19:03:20
+disqusId: zhangxian
+categories:
+- PyTorch
+
+tags:
+- AI
+- Deep Learning
+---
+
+> 本章代码：
+>
+> - [https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson8/detection_demo.py](https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson8/detection_demo.py)
+> - [https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson8/fasterrcnn_demo.py](https://github.com/zhangxiann/PyTorch_Practice/blob/master/lesson8/fasterrcnn_demo.py)
+
+这篇文章主要介绍了目标检测。
+
+目标检测是判断目标在图像中的位置，有两个要素：
+
+- 分类：分类向量$P_{0}, P_{1}, P_{2}...$，shape 为$[N, c+1]$
+- 回归：回归边界框$[x_{1}, x_{2}, y_{1}, y_{2}]$，shape 为$[n, 4]$
+
+
+
+下面代码是加载预训练好的`FasterRCNN_ResNet50_fpn`，这个模型在是 COCO 模型上进行训练的，有 91 种类别。这里图片不再是`BCHW`的形状，而是一个`list`，每个元素是图片。输出也是一个 list，每个元素是一个 dict，每个 dict 包含三个元素：boxes、scores、labels，每个元素都是 list，因为一张图片中可能包含多个目标。接着是绘制框的代码，`scores`的的某个元素小于某个阈值，则不绘制这个框。<!--more-->
+
+```
+import os
+import time
+import torch.nn as nn
+import torch
+import numpy as np
+import torchvision.transforms as transforms
+import torchvision
+from PIL import Image
+from matplotlib import pyplot as plt
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+# classes_coco
+COCO_INSTANCE_CATEGORY_NAMES = [
+    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
+    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
+    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
+    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
+    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+
+if __name__ == "__main__":
+
+    path_img = os.path.join(BASE_DIR, "demo_img1.png")
+    # path_img = os.path.join(BASE_DIR, "demo_img2.png")
+
+    # config
+    preprocess = transforms.Compose([
+        transforms.ToTensor(),
+    ])
+
+    # 1. load data & model
+    input_image = Image.open(path_img).convert("RGB")
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+    model.eval()
+
+    # 2. preprocess
+    img_chw = preprocess(input_image)
+
+    # 3. to device
+    if torch.cuda.is_available():
+        img_chw = img_chw.to('cuda')
+        model.to('cuda')
+
+    # 4. forward
+    # 这里图片不再是 BCHW 的形状，而是一个list，每个元素是图片
+    input_list = [img_chw]
+    with torch.no_grad():
+        tic = time.time()
+        print("input img tensor shape:{}".format(input_list[0].shape))
+        output_list = model(input_list)
+        # 输出也是一个 list，每个元素是一个 dict
+        output_dict = output_list[0]
+        print("pass: {:.3f}s".format(time.time() - tic))
+        for k, v in output_dict.items():
+            print("key:{}, value:{}".format(k, v))
+
+    # 5. visualization
+    out_boxes = output_dict["boxes"].cpu()
+    out_scores = output_dict["scores"].cpu()
+    out_labels = output_dict["labels"].cpu()
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    ax.imshow(input_image, aspect='equal')
+
+    num_boxes = out_boxes.shape[0]
+    # 这里最多绘制 40 个框
+    max_vis = 40
+    thres = 0.5
+
+    for idx in range(0, min(num_boxes, max_vis)):
+
+        score = out_scores[idx].numpy()
+        bbox = out_boxes[idx].numpy()
+        class_name = COCO_INSTANCE_CATEGORY_NAMES[out_labels[idx]]
+        # 如果分数小于这个阈值，则不绘制
+        if score < thres:
+            continue
+
+        ax.add_patch(plt.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], fill=False,
+                                   edgecolor='red', linewidth=3.5))
+        ax.text(bbox[0], bbox[1] - 2, '{:s} {:.3f}'.format(class_name, score), bbox=dict(facecolor='blue', alpha=0.5),
+                fontsize=14, color='white')
+    plt.show()
+    plt.close()
+
+
+
+    # appendix
+    classes_pascal_voc = ['__background__',
+                       'aeroplane', 'bicycle', 'bird', 'boat',
+                       'bottle', 'bus', 'car', 'cat', 'chair',
+                       'cow', 'diningtable', 'dog', 'horse',
+                       'motorbike', 'person', 'pottedplant',
+                       'sheep', 'sofa', 'train', 'tvmonitor']
+
+    # classes_coco
+    COCO_INSTANCE_CATEGORY_NAMES = [
+        '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+        'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
+        'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+        'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
+        'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+        'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+        'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+        'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+        'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
+        'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+        'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
+        'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+    ]
+```
+
+输出如下：
+
+<div align="center"><img src="https://image.zhangxiann.com/20200708205753.png"/></div><br>
+目标检测中难题之一是边界框的数量 $N$ 的确定。
+
+传统的方法是滑动窗口策略，缺点是重复计算量大，窗口大小难以确定。
+
+将全连接层改为卷积层，最后一层特征图的一个像素就对应着原图的一个区域，就可以使用利用卷积操作实现滑动窗口。
+
+目标检测模型可以划分为 one-stage 和 two-stage。
+
+one-stage 包括：
+
+- YOLO
+- SSD
+- Retina-Net
+
+two-stage 包括：
+
+- RCNN
+- SPPNet
+- Fast RCNN
+- Faster RCNN
+- Pyramid Network
+
+one-stage 的模型是直接把得到的特征图划分为多个网格，每个网格分别做分类和回归。
+
+two-stage 的模型多了 proposal generation，输出 多个候选框，通常默认 2000 个候选框
+
+在 Faster RCNN 中，proposal generation 是 RPN(Region Proposal Network)，会根据 feature map 生成数十万个候选框，通过 NMS 选出前景概率最高的 2000 个框。由于候选框的大小各异，通过 ROI pooling，得到固定大小的输出，channel 数量就是框的数量。ROI pooling 的特点是**输入特征图**尺寸不固定，但是**输出特征图**尺寸固定。最后经过全连接层得到回归和分类的输出。
+
+`fasterrcnn_resnet50_fpn`会返回一个`FasterRCNN`，`FasterRCNN`继承于`GeneralizedRCNN`，`GeneralizedRCNN`的`forward()`函数中包括下面 3 个模块：
+
+- backbone：`features = self.backbone(images.tensors)`
+
+  在构建 backbone 时，会根据`backbone_name`选择对应的 backbone，这里使用 resnet50。
+
+- rpn：`proposals, proposal_losses = self.rpn(images, features, targets)`
+
+- roi_heads：`detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)`
+
+
+
+`GeneralizedRCNN`的`forward()`函数如下：
+
+```
+    def forward(self, images, targets=None):
+    ...
+    ...
+    ...
+        features = self.backbone(images.tensors)
+        if isinstance(features, torch.Tensor):
+            features = OrderedDict([('0', features)])
+        proposals, proposal_losses = self.rpn(images, features, targets)
+        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
+
+        losses = {}
+        losses.update(detector_losses)
+        losses.update(proposal_losses)
+
+        if torch.jit.is_scripting():
+            if not self._has_warned:
+                warnings.warn("RCNN always returns a (Losses, Detections) tuple in scripting")
+                self._has_warned = True
+            return (losses, detections)
+        else:
+            return self.eager_outputs(losses, detections)
+```
+
+`self.backbone(images.tensors)`返回的`features`是一个 dict，每个元素是一个 feature map，每个特征图的宽高是上一个特征图宽高的一半。
+
+<div align="center"><img src="https://image.zhangxiann.com/20200709164301.png"/></div><br>
+这 5 个 feature map 分别对应 ResNet  中的 5 个特征图
+
+<div align="center"><img src="https://image.zhangxiann.com/20200709164528.png"/></div><br>
+接下来进入 rpn 网络，rpn 网络代码如下。
+
+```
+    def forward(self, images, features, targets=None):
+	...
+	...
+	...
+        features = list(features.values())
+        objectness, pred_bbox_deltas = self.head(features)
+        anchors = self.anchor_generator(images, features)
+
+        num_images = len(anchors)
+        num_anchors_per_level = [o[0].numel() for o in objectness]
+        objectness, pred_bbox_deltas = \
+            concat_box_prediction_layers(objectness, pred_bbox_deltas)
+        # apply pred_bbox_deltas to anchors to obtain the decoded proposals
+        # note that we detach the deltas because Faster R-CNN do not backprop through
+        # the proposals
+        proposals = self.box_coder.decode(pred_bbox_deltas.detach(), anchors)
+        proposals = proposals.view(num_images, -1, 4)
+        boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
+```
+
+`self.head(features)`会调用`RPNHead`，返回的`objectness`和`pred_bbox_deltas`都是和`features`大小一样的 dict，只是 channel 数量不一样。`objectness`的 channel 数量是 3，表示特征图的一个像素点输出 3 个可能的框；`pred_bbox_deltas`的 channel 数量是 12，表示每个特征图的 3 个框的坐标的偏移量。
+
+`self.anchor_generator(images, features)`的输出是`anchors`，形状是$242991 \times 4$，这是真正的框。
+
+`self.filter_proposals()`对应的是 NMS，用于挑选出一部分框。
+
+```
+    def filter_proposals(self, proposals, objectness, image_shapes, num_anchors_per_level):
+		...
+		...
+		...
+        # select top_n boxes independently per level before applying nms
+        top_n_idx = self._get_top_n_idx(objectness, num_anchors_per_level)
+
+        image_range = torch.arange(num_images, device=device)
+        batch_idx = image_range[:, None]
+
+        objectness = objectness[batch_idx, top_n_idx]
+        levels = levels[batch_idx, top_n_idx]
+        proposals = proposals[batch_idx, top_n_idx]
+
+        final_boxes = []
+        final_scores = []
+        for boxes, scores, lvl, img_shape in zip(proposals, objectness, levels, image_shapes):
+            boxes = box_ops.clip_boxes_to_image(boxes, img_shape)
+            keep = box_ops.remove_small_boxes(boxes, self.min_size)
+            boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
+            # non-maximum suppression, independently done per level
+            keep = box_ops.batched_nms(boxes, scores, lvl, self.nms_thresh)
+            # keep only topk scoring predictions
+            keep = keep[:self.post_nms_top_n()]
+            boxes, scores = boxes[keep], scores[keep]
+            final_boxes.append(boxes)
+            final_scores.append(scores)
+        return final_boxes, final_scores
+```
+
+其中`self._get_top_n_idx()`函数去取出概率最高的前 4000 个框的索引。最后的`for`循环是根据特征图的框还原为原图的框，并选出最前面的 1000 个框（训练时是 2000 个，测试时是 1000 个）。
+
+然后回到`GeneralizedRCNN`的`forward()`函数里的`roi_heads()`，实际上是调用`RoIHeads`，`forward()`函数如下：
+
+```
+    def forward(self, features, proposals, image_shapes, targets=None):
+		...
+		...
+		...
+        box_features = self.box_roi_pool(features, proposals, image_shapes)
+        box_features = self.box_head(box_features)
+        class_logits, box_regression = self.box_predictor(box_features)
+```
+
+其中`box_roi_pool()`是调用`MultiScaleRoIAlign`把不同尺度的特征图池化到相同尺度，返回给`box_features`，形状是$[1000, 256, 7, 7]$，1000 表示有 1000 个框（在训练时会从2000个选出 512 个，测试时则全部选，所以是 1000）。`box_head()`是两个全连接层，返回的数形状是$[1000,1024]$，一个候选框使用一个 1024 的向量来表示。`box_predictor()`输出最终的分类和边界框，`class_logits`的形状是$[1000,91]$，`box_regression`的形状是$[1000,364]$，$364=91 \times 4$。
+
+然后回到`GeneralizedRCNN`的`forward()`函数中，`transform.postprocess()`对输出进行后处理，将输出转换到原始图像的维度上。
+
+下面总结一下 Faster RCNN 的主要组件：
+
+1. backbone
+2. rpn
+3. filter_proposals(NMS)
+4. rio_heads
+
+下面的例子是使用 Faster RCNN 进行行人检测的 Finetune。数据集下载地址是https://www.cis.upenn.edu/~jshi/ped_html/，包括 70 张行人照片，345 个行人标签。
+
+数据存放结构如下：
+
+- PennFudanPed
+  - Annotation：标注文件，为`txt`
+  - PedMasks：不清楚，没用到
+  - PNGImages：图片数据
+
+在`Dataset`中，首先在构造函数中保存所有图片的文件名，后面用于查找对应的 txt 标签文件；在`__getitem__()`函数中根据 index 获得图片和 txt 文件，查找 txt 文件的每一行是否有数字，有数字的则是带有标签的行，处理得到 boxes 和 labels，最后构造 target，target 是一个 dict，包括 boxes 和 labels。
+
+在构造 DataLoader 时，还要传入一个`collate_fn()`函数。这是因为在目标检测中，图片的宽高可能不一样，无法以 4D 张量的形式拼接一个 batch 的图片，因此这里使用 tuple 来拼接数据。
+
+```
+    # 收集batch data的函数
+    def collate_fn(batch):
+        return tuple(zip(*batch))
+```
+
+collate_fn 的输入是 list，每个元素是 tuple；每个 tuple 是 Dataset 中的 `__getitem__()`返回的数据，包括`(image, target)`
+
+举个例子：
+
+```
+image=[1,2,3]
+target=[4,5,6]
+batch=list(zip(image,target))
+print("batch:")
+print(batch)
+collate_result = tuple(zip(*batch))
+print("collate_result:")
+print(collate_result)
+```
+
+输出为：
+
+```
+batch:
+[(1, 4), (2, 5), (3, 6)]
+collate_result:
+((1, 2, 3), (4, 5, 6))
+```
+
+在代码中首先对**数据和标签**同时进行数据增强，因为对图片进行改变，框的位置也会变化，这里主要做了翻转图像和边界框的数据增强。
+
+构建模型时，需要修改输出的类别为 2，一类是背景，一类是行人。
+
+```
+model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+in_features = model.roi_heads.box_predictor.cls_score.in_features
+model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+```
+
+这里不用构造 Loss，因为在 Faster RCNN 中已经构建了 Loss。在训练时，需要把 image 和 target 的 tuple 转换为 list，再输入模型。模型返回的不是真正的标签，而是直接返回 Loss，所以我们可以直接利用这个 Loss 进行反向传播。
+
+代码如下：
+
+```
+import os
+import time
+import torch.nn as nn
+import torch
+import random
+import numpy as np
+import torchvision.transforms as transforms
+import torchvision
+from PIL import Image
+import torch.nn.functional as F
+from my_dataset import PennFudanDataset
+from common_tools import set_seed
+from torch.utils.data import DataLoader
+from matplotlib import pyplot as plt
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.transforms import functional as F
+import enviroments
+
+set_seed(1)  # 设置随机种子
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# classes_coco
+COCO_INSTANCE_CATEGORY_NAMES = [
+    '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
+    'train', 'truck', 'boat', 'traffic light', 'fire hydrant', 'N/A', 'stop sign',
+    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'N/A', 'backpack', 'umbrella', 'N/A', 'N/A',
+    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball',
+    'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard', 'tennis racket',
+    'bottle', 'N/A', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
+    'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza',
+    'donut', 'cake', 'chair', 'couch', 'potted plant', 'bed', 'N/A', 'dining table',
+    'N/A', 'N/A', 'toilet', 'N/A', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+    'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'N/A', 'book',
+    'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush'
+]
+
+
+def vis_bbox(img, output, classes, max_vis=40, prob_thres=0.4):
+    fig, ax = plt.subplots(figsize=(12, 12))
+    ax.imshow(img, aspect='equal')
+    
+    out_boxes = output_dict["boxes"].cpu()
+    out_scores = output_dict["scores"].cpu()
+    out_labels = output_dict["labels"].cpu()
+    
+    num_boxes = out_boxes.shape[0]
+    for idx in range(0, min(num_boxes, max_vis)):
+
+        score = out_scores[idx].numpy()
+        bbox = out_boxes[idx].numpy()
+        class_name = classes[out_labels[idx]]
+
+        if score < prob_thres:
+            continue
+
+        ax.add_patch(plt.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], fill=False,
+                                   edgecolor='red', linewidth=3.5))
+        ax.text(bbox[0], bbox[1] - 2, '{:s} {:.3f}'.format(class_name, score), bbox=dict(facecolor='blue', alpha=0.5),
+                fontsize=14, color='white')
+    plt.show()
+    plt.close()
+
+
+class Compose(object):
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, image, target):
+        for t in self.transforms:
+            image, target = t(image, target)
+        return image, target
+
+
+class RandomHorizontalFlip(object):
+    def __init__(self, prob):
+        self.prob = prob
+
+    def __call__(self, image, target):
+        if random.random() < self.prob:
+            height, width = image.shape[-2:]
+            image = image.flip(-1)
+            bbox = target["boxes"]
+            bbox[:, [0, 2]] = width - bbox[:, [2, 0]]
+            target["boxes"] = bbox
+        return image, target
+
+
+class ToTensor(object):
+    def __call__(self, image, target):
+        image = F.to_tensor(image)
+        return image, target
+
+
+if __name__ == "__main__":
+
+    # config
+    LR = 0.001
+    num_classes = 2
+    batch_size = 1
+    start_epoch, max_epoch = 0, 5
+    train_dir = enviroments.pennFudanPed_data_dir
+    train_transform = Compose([ToTensor(), RandomHorizontalFlip(0.5)])
+
+    # step 1: data
+    train_set = PennFudanDataset(data_dir=train_dir, transforms=train_transform)
+
+    # 收集batch data的函数
+    def collate_fn(batch):
+        return tuple(zip(*batch))
+
+    train_loader = DataLoader(train_set, batch_size=batch_size, collate_fn=collate_fn)
+
+    # step 2: model
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes) # replace the pre-trained head with a new one
+
+    model.to(device)
+
+    # step 3: loss
+    # in lib/python3.6/site-packages/torchvision/models/detection/roi_heads.py
+    # def fastrcnn_loss(class_logits, box_regression, labels, regression_targets)
+
+    # step 4: optimizer scheduler
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.SGD(params, lr=LR, momentum=0.9, weight_decay=0.0005)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+
+    # step 5: Iteration
+
+    for epoch in range(start_epoch, max_epoch):
+
+        model.train()
+        for iter, (images, targets) in enumerate(train_loader):
+
+            images = list(image.to(device) for image in images)
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+
+            # if torch.cuda.is_available():
+            #     images, targets = images.to(device), targets.to(device)
+
+            loss_dict = model(images, targets)  # images is list; targets is [ dict["boxes":**, "labels":**], dict[] ]
+
+            losses = sum(loss for loss in loss_dict.values())
+
+            print("Training:Epoch[{:0>3}/{:0>3}] Iteration[{:0>3}/{:0>3}] Loss: {:.4f} ".format(
+                epoch, max_epoch, iter + 1, len(train_loader), losses.item()))
+
+            optimizer.zero_grad()
+            losses.backward()
+            optimizer.step()
+
+        lr_scheduler.step()
+
+    # test
+    model.eval()
+
+    # config
+    vis_num = 5
+    vis_dir = os.path.join(BASE_DIR, "..", "..", "data", "PennFudanPed", "PNGImages")
+    img_names = list(filter(lambda x: x.endswith(".png"), os.listdir(vis_dir)))
+    random.shuffle(img_names)
+    preprocess = transforms.Compose([transforms.ToTensor(), ])
+
+    for i in range(0, vis_num):
+
+        path_img = os.path.join(vis_dir, img_names[i])
+        # preprocess
+        input_image = Image.open(path_img).convert("RGB")
+        img_chw = preprocess(input_image)
+
+        # to device
+        if torch.cuda.is_available():
+            img_chw = img_chw.to('cuda')
+            model.to('cuda')
+
+        # forward
+        input_list = [img_chw]
+        with torch.no_grad():
+            tic = time.time()
+            print("input img tensor shape:{}".format(input_list[0].shape))
+            output_list = model(input_list)
+            output_dict = output_list[0]
+            print("pass: {:.3f}s".format(time.time() - tic))
+
+        # visualization
+        vis_bbox(input_image, output_dict, COCO_INSTANCE_CATEGORY_NAMES, max_vis=20, prob_thres=0.5)  # for 2 epoch for nms
+
+```
+
+
+
+**参考资料**
+
+- [深度之眼 PyTorch 框架班](https://ai.deepshare.net/detail/p_5df0ad9a09d37_qYqVmt85/6)
+
+<br>
+
+如果你觉得这篇文章对你有帮助，不妨点个赞，让我有更多动力写出好文章。
+<br>
+
+我的文章会首发在公众号上，欢迎扫码关注我的公众号**张贤同学**。
+
+<div align="center"><img src="https://image.zhangxiann.com/QRcode_8cm.jpg"/></div><br>
