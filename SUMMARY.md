@@ -37,5 +37,4 @@
 * [9 其他](9-qi-ta/README.md)
   * [PyTorch 常见报错信息](9-qi-ta/pytorch-chang-jian-bao-cuo-xin-xi.md)
   * [图神经网络 PyTorch Geometric 入门教程](9-qi-ta/tu-shen-jing-wang-luo-pytorch-geometric-ru-men-jiao-cheng.md)
-* [PyTorch 学习笔记](kai-pian-ci-pytorch-xue-xi-bi-ji.md)
 
