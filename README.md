@@ -1,6 +1,4 @@
 ---
-thumbnail: https://image.zhangxiann.com/doris-x-SlB4R_hVaOc-unsplash.jpg
-toc: true
 date: 2020/6/1 21:26:20
 disqusId: zhangxian
 categories:
@@ -108,4 +106,3 @@ https://github.com/zhangxiann/PyTorch_Practice
 欢迎扫码关注我的公众号**张贤同学**。
 
 <div align="center"><img src="https://image.zhangxiann.com/QRcode_8cm.jpg"/></div><br>
-
