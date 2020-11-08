@@ -1,5 +1,16 @@
 # \(开篇词\)PyTorch 学习笔记
 
+<p align='center'>
+<a href="https://github.com/labuladong/fucking-algorithm" target="_blank"><img alt="GitHub" src="https://img.shields.io/github/stars/zhangxiann/PyTorch_Practice?label=Stars&style=flat-square&logo=GitHub"></a>
+<a href="https://labuladong.gitbook.io/algo" target="_blank"><img alt="Website" src="https://img.shields.io/website?label=%E5%9C%A8%E7%BA%BF%E7%94%B5%E5%AD%90%E4%B9%A6&style=flat-square&down_color=blue&down_message=%E7%82%B9%E8%BF%99%E9%87%8C&up_color=blue&up_message=%E7%82%B9%E8%BF%99%E9%87%8C&url=https://pytorch.zhangxiann.com/&logo=Gitea"></a>
+</p>
+
+<p align='center'>
+<a href="https://www.github.com/labuladong" target="_blank"><img src="https://img.shields.io/badge/作者-@zhangxiann-000000.svg?style=flat-square&logo=GitHub"></a>
+<a href="https://www.zhihu.com/people/zhangxian/posts" target="_blank"><img src="https://img.shields.io/badge/%E7%9F%A5%E4%B9%8E-@张贤同学-000000.svg?style=flat-square&logo=Zhihu"></a>
+<a href="https://image.zhangxiann.com/QRcode_8cm.jpg" target="_blank"><img src="https://img.shields.io/badge/公众号-@张贤同学-000000.svg?style=flat-square&logo=WeChat"></a>
+</p>
+
 这篇文章是我学习 PyTorch 过程中所记录的学习笔记汇总，包括 **25** 篇文章，是我学习 **PyTorch** 框架版课程期间所记录的内容。
 
 学习笔记的结构遵循课程的顺序，共分为 8 周，循序渐进，**力求通俗易懂**。
